@@ -10,6 +10,11 @@ import UIKit
 import QuartzCore
 import Foundation
 
+@objc protocol SpringySliderDelegate: class {
+    optional func springySliderValueChanged(value: Float)
+    optional func springySliderRawValueChanged(value: CGFloat)
+}
+
 @IBDesignable class SpringySlider: UIControl
 {
     private let trackLayerHeight: CGFloat = 4.0
@@ -18,6 +23,8 @@ import Foundation
     private var minTrackLayer: CALayer = CALayer()
     private var maxTrackLayer: CALayer = CALayer()
     private var previousTouchPoint: CGPoint = CGPointZero
+    
+    weak var delegate: SpringySliderDelegate?
     
     private enum Direction {
         case Left
@@ -28,12 +35,34 @@ import Foundation
         return self.bounds.size.width
     }
     
-    internal var value: CGFloat = 0.5 {
+    internal var rawValue: CGFloat = 0.5 {
         didSet {
-            self.thumbLayer.position.x = self.value * self.bounds.width
-            self.minTrackLayer.frame.size.width = self.value * self.bounds.width
+            self.thumbLayer.position.x = self.rawValue * self.bounds.width
+            self.minTrackLayer.frame.size.width = self.rawValue * self.bounds.width
         }
     }
+    
+    internal var value: Float {
+        set(newVal) {
+            if newVal > self.maximumValue {
+                self.rawValue = 1.0
+            }
+            
+            else if newVal < self.minimumValue {
+                self.rawValue = 0.0
+            }
+            
+            else {
+                self.rawValue = CGFloat(newVal / (self.maximumValue - self.minimumValue))
+            }
+        }
+        get {
+            return ((self.maximumValue - self.minimumValue) * Float(self.rawValue)) + self.minimumValue
+        }
+    }
+    
+    @IBInspectable internal var minimumValue: Float = 0.0
+    @IBInspectable internal var maximumValue: Float = 100.0
     
     @IBInspectable internal var thumbTintColor: UIColor = UIColor.whiteColor() {
         didSet {
@@ -52,7 +81,7 @@ import Foundation
         didSet {
             self.thumbLayer.contents = thumbImage!.CGImage
             self.thumbLayer.frame.size = thumbImage!.size
-            self.thumbLayer.position = CGPointMake(self.value * self.trackLayerWidth, self.trackLayerHeight)
+            self.thumbLayer.position = CGPointMake(self.rawValue * self.trackLayerWidth, self.trackLayerHeight)
             self.thumbLayer.path = nil
         }
     }
@@ -79,7 +108,7 @@ import Foundation
         self.layer.addSublayer(self.maxTrackLayer)
         
         self.minTrackLayer = CALayer()
-        self.minTrackLayer.frame = CGRectMake(0, 0, self.value * self.trackLayerWidth, self.trackLayerHeight)
+        self.minTrackLayer.frame = CGRectMake(0, 0, self.rawValue * self.trackLayerWidth, self.trackLayerHeight)
         self.minTrackLayer.backgroundColor = self.trackTintColor.CGColor
         self.layer.addSublayer(self.minTrackLayer)
         
@@ -88,7 +117,7 @@ import Foundation
         self.thumbLayer.path = self.defaultThumbMaskPath()
         self.thumbLayer.fillColor = self.thumbTintColor.CGColor
         self.thumbLayer.anchorPoint = CGPoint(x: 0.5, y: 0)
-        self.thumbLayer.position = CGPointMake(self.value * self.trackLayerWidth, self.trackLayerHeight)
+        self.thumbLayer.position = CGPointMake(self.rawValue * self.trackLayerWidth, self.trackLayerHeight)
         self.layer.addSublayer(self.thumbLayer)
     }
     
@@ -96,8 +125,8 @@ import Foundation
         super.layoutSubviews()
         
         self.maxTrackLayer.frame = CGRectMake(0, 0, self.trackLayerWidth, self.trackLayerHeight)
-        self.minTrackLayer.frame = CGRectMake(0, 0, self.value * self.trackLayerWidth, self.trackLayerHeight)
-        self.thumbLayer.position = CGPointMake(self.value * self.trackLayerWidth, self.trackLayerHeight)
+        self.minTrackLayer.frame = CGRectMake(0, 0, self.rawValue * self.trackLayerWidth, self.trackLayerHeight)
+        self.thumbLayer.position = CGPointMake(self.rawValue * self.trackLayerWidth, self.trackLayerHeight)
     }
     
     // MARK: tracking behaviour
@@ -155,7 +184,9 @@ import Foundation
             CATransaction.setDisableActions(true)
             
             var newValue = (self.thumbLayer.position.x + deltaX) / self.trackLayerWidth
-            self.value = min(max(newValue, 0.0), 1.0)
+            self.rawValue = min(max(newValue, 0.0), 1.0)
+            self.delegate?.springySliderValueChanged?(self.value)
+            self.delegate?.springySliderRawValueChanged?(self.rawValue)
             
             CATransaction.commit()
         }
